@@ -32,3 +32,13 @@ jobs:
 
       - name: Run core logic tests
         run: python -m unittest discover -s tests -v
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test browser game math
+        run: npm test
+
+      - name: Build static browser game
+        run: npm run build

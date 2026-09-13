@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111a18">
+  <meta name="description" content="Slice fresh fruit with your hands. A camera-powered arcade, running privately in your browser.">
+  <title>Fruit Ninja — The fresh-cut arcade</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ctext y='32' font-size='34'%3E✳%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./web/style.css">
+</head>
+<body>
+  <header><a class="brand" href="./"><span class="brand-icon">✳</span> fruit ninja<span class="edition"> / HAND TRACKING EDITION</span></a><span class="local"><i></i> Made to move.</span></header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">A LITTLE MOVEMENT. A LOT OF JUICE.</p><h1>Your hand. <em>Your blade.</em></h1></div><p>Step into the freshest arcade.<br>Raise a finger. Make your move.</p></div>
+    <section class="arena" aria-label="Fruit slicing game">
+      <video id="camera" autoplay playsinline muted></video>
+      <canvas id="game" aria-label="Game field. Use hand tracking or drag with mouse or touch."></canvas>
+      <div class="game-top"><div class="score"><span>SCORE</span><strong id="score">000</strong></div><div class="level-info"><strong id="level">LEVEL 1</strong><span id="level-detail">1.00x speed / next in 20s</span><div id="combo" class="combo"></div></div><div class="lives"><span>CHANCES</span><strong id="lives" aria-label="5 lives">&#9679; &#9679; &#9679; &#9679; &#9679;</strong></div></div>
+      <span id="level-announcement" class="sr-only" role="status" aria-live="polite"></span>
+      <div class="overlay" id="overlay">
+        <div class="welcome"><span class="pill">THE FRESH-CUT ARCADE</span><h2 id="title">Less clicking.<br><em>More slicing.</em></h2><p id="description">Turn your fingertip into a blade.<br>Start easy. Slice your way through six levels.</p><button id="start" class="primary">Enable camera & play <span>↗</span></button><button id="pointer" class="text-button">Or try with mouse / touch →</button><p class="privacy">Camera stays on your device. No recording.</p></div>
+      </div>
+      <div class="game-bottom"><span id="status" role="status" aria-live="polite"><i></i> Ready when you are</span><div><button id="preview" aria-pressed="false" hidden>Camera view</button><button id="pause" hidden>Pause</button><button id="exit" hidden>End game</button><span class="best">BEST <b id="best">0</b></span></div></div>
+    </section>
+    <div class="instructions"><div><span class="step">01</span><p><b>Find your light</b><span>Give your camera a clear view of your hand.</span></p></div><div><span class="step">02</span><p><b>Make the cut</b><span>Sweep your index finger through the fruit.</span></p></div><div><span class="step">03</span><p><b>Keep it fresh</b><span>Chain slices for combos. Avoid the bombs.</span></p></div></div>
+  </main>
+  <footer><span>FRESH FRUIT. SHARP REFLEXES.</span><span>Computer vision, a little playfulness, and you.</span></footer>
+  <script type="module" src="./web/app.js"></script>
+</body>
+</html>

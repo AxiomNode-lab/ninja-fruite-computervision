@@ -44,8 +44,8 @@ flowchart LR
 - Index-finger slicing gestures
 - Velocity-based gesture thresholding
 - Fruit spawning and gravity-based physics
-- Multiple fruit types with emoji rendering
-- Fruit collision and slicing
+- Multiple fruit types with cached illustrated artwork
+- Fruit collision, animated halves, and juice splashes
 - Bomb obstacles and score penalties
 - Score and combo system
 - Lives and missed-fruit penalties
@@ -91,6 +91,58 @@ ninja-fruite-computervision/
 ```
 
 ## Getting Started
+
+### Play in the browser (new)
+
+The repository now includes a responsive static web game with illustrated fruit,
+directional fruit halves, juice particles, combos, mouse/touch support, and
+two-hand MediaPipe tracking. Browser rounds have five lives and six difficulty levels. Every 20 seconds of
+active play, fruit speed increases by 15 percentage points, up to 1.75x at level 6.
+Fruit waves and bombs become more frequent. Preparation, pause, and tracking loss
+do not advance the level timer. Restarting resets difficulty to level 1.
+Rendering uses `requestAnimationFrame`; inference
+runs in a worker, throttled to 30 requests/second with one frame in flight.
+Adaptive fingertip smoothing reduces jitter and resets after tracking loss.
+
+From the repository root, run:
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+Open **http://localhost:8000** and choose **Enable camera & play**. The browser
+requests camera permission; no microphone is requested. You can also choose
+mouse/touch mode and drag to slice. Escape pauses; End game releases the camera.
+Camera frames stay in the browser and are not uploaded or recorded.
+
+For deployment, run `npm run build` (Node 22+) and publish **dist/** as a static
+site. Included Vercel and Netlify settings select that directory and allow camera
+access on the same origin. No backend or Python runtime is needed in production.
+The build copies only browser assets and the local hand model.
+
+Camera access requires **HTTPS** in production (localhost works for development).
+Browsers remember permission choices, so a prompt is not guaranteed on every
+visit. If denied, allow the camera in site settings and retry. If embedded, the
+parent page must also permit the camera via its Permissions Policy and
+`<iframe allow="camera">`; opening the site directly is simplest.
+
+The initial hand tracker loads pinned MediaPipe JavaScript/WASM from jsDelivr;
+fonts load from Google Fonts with local fallbacks. An internet connection is
+needed for the tracker. The model is served locally as `hand_landmarker.task`.
+If loading fails or the camera disconnects, mouse/touch mode remains available.
+
+```bash
+npm test
+npm run build
+```
+
+Browser tests cover continuous collision detection, jitter reduction, tracking
+reacquisition, mirrored/cropped camera coordinates, and separating fruit halves.
+Physical-camera tracking quality should also be checked on the target devices.
+
+The Python game also has cached fruit artwork, animated halves and juice,
+shared smoothed coordinates for trails and collisions, real video timestamps,
+and corrected missed-fruit accounting and object cleanup.
 
 ### Requirements
 

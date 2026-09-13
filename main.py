@@ -12,6 +12,8 @@ from config import (
     DISPLAY_NAME,
     FPS,
     GESTURE_HAND_RADIUS,
+    GESTURE_HISTORY_SIZE,
+    GESTURE_VELOCITY_THRESHOLD,
     LANDMARK_COLOR,
     LANDMARK_RADIUS,
 )
@@ -21,6 +23,7 @@ from game.game_manager import GameManager
 from game.gesture_detector import GestureDetector
 from ui.hud import HUD
 from vision.hand_tracker import HandTracker
+from vision.smoothing import FingertipSmoother
 
 
 def main():
@@ -74,7 +77,8 @@ def main():
 
         print("Initializing Gesture Detector...")
         sys.stdout.flush()
-        gesture_detector = GestureDetector()
+        gesture_detector = GestureDetector(GESTURE_HISTORY_SIZE, GESTURE_VELOCITY_THRESHOLD)
+        smoother = FingertipSmoother()
         print("[OK] Gesture detector initialized")
         sys.stdout.flush()
 
@@ -104,6 +108,7 @@ def main():
                 sys.stdout.flush()
 
             frame, hands_data = hand_tracker.process_frame(frame)
+            hands_data = smoother.update(hands_data, engine.delta_time)
 
             if frame_count == 0:
                 print(f"[OK] Hand detection working (found {len(hands_data)} hands)")
@@ -113,6 +118,7 @@ def main():
             for idx, hand_data in enumerate(hands_data):
                 if hand_data is None or hand_data.get("sliced", False):
                     continue
+                idx = hand_data.get("tracking_id", idx)
                 landmarks = hand_data.get("landmarks", [])
                 if len(landmarks) > 8:
                     index_finger = landmarks[8]
@@ -135,7 +141,7 @@ def main():
                     factor = index / len(points)
                     thickness = max(1, int(15 * factor))
                     color = (0, int(255 * factor), 255)
-                    cv2.line(frame, points[index], points[index + 1], color, thickness)
+                    cv2.line(frame, points[index], points[index + 1], color, thickness, cv2.LINE_AA)
                     core_thickness = max(1, int(5 * factor))
                     cv2.line(
                         frame,
@@ -143,6 +149,7 @@ def main():
                         points[index + 1],
                         (255, 255, 255),
                         core_thickness,
+                        cv2.LINE_AA,
                     )
 
             frame = hand_tracker.draw_landmarks(
@@ -173,13 +180,14 @@ def main():
 
                 game_manager.update(engine.delta_time)
 
-                for fruit in spawner.get_fruits():
-                    if not fruit.sliced and fruit.is_off_screen():
-                        if not game_manager.miss_fruit():
-                            break
+                for _ in range(spawner.consume_missed_fruits()):
+                    if not game_manager.miss_fruit():
+                        break
 
                 slices = gesture_detector.update(hands_data, engine.delta_time)
                 for slice_data in slices:
+                    if game_manager.is_game_over():
+                        break
                     hand_pos = slice_data["position"]
                     old_hand_pos = slice_data.get("old_position", hand_pos)
 
@@ -189,7 +197,7 @@ def main():
                         radius_padding=GESTURE_HAND_RADIUS,
                     )
                     for fruit in nearby_fruits:
-                        spawner.slice_fruit(fruit)
+                        spawner.slice_fruit(fruit, slice_data["direction"])
                         game_manager.slice_fruit()
 
                     nearby_bombs = spawner.get_bomb_intersecting_line(

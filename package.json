@@ -1,0 +1,10 @@
+{
+  "name": "ninja-fruite-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node web/build.js",
+    "start": "python -m http.server 8000 --bind 127.0.0.1",
+    "test": "node --test web/tests/*.test.js"
+  }
+}

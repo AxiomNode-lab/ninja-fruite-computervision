@@ -18,6 +18,7 @@ class GestureDetector:
         slices = []
         self.last_timestamp += delta_time
 
+        detected_indices = set()
         for hand_idx, hand_data in enumerate(hands_data):
             if hand_data is None or hand_data.get("sliced", False):
                 continue
@@ -26,6 +27,10 @@ class GestureDetector:
             if len(landmarks) <= 8:
                 continue
 
+            hand_idx = hand_data.get("tracking_id", hand_idx)
+            detected_indices.add(hand_idx)
+            if delta_time > 0.15:
+                self.hand_histories.pop(hand_idx, None)
             x, y = landmarks[8]
             if hand_idx not in self.hand_histories:
                 self.hand_histories[hand_idx] = deque(maxlen=self.history_size)
@@ -38,7 +43,6 @@ class GestureDetector:
                 if slice_detected:
                     slices.append(slice_detected)
 
-        detected_indices = set(range(len(hands_data)))
         stale_indices = [
             hand_idx
             for hand_idx in self.hand_histories
@@ -53,7 +57,7 @@ class GestureDetector:
         if len(history) < 2:
             return None
 
-        x1, y1, t1 = history[0]
+        x1, y1, t1 = history[-2]
         x2, y2, t2 = history[-1]
         delta_time = t2 - t1
         if delta_time <= 0:

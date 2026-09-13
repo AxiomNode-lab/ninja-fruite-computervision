@@ -1,6 +1,7 @@
 """MediaPipe hand-landmark tracking for the Fruit Ninja game."""
 
 import os
+import time
 
 import cv2
 import mediapipe as mp
@@ -19,6 +20,7 @@ class HandTracker:
 
     def __init__(self):
         self.frame_count = 0
+        self.last_timestamp_ms = -1
         self.landmarker = None
 
         model_path = "hand_landmarker.task"
@@ -61,7 +63,9 @@ class HandTracker:
 
         try:
             if timestamp_ms is None:
-                timestamp_ms = self.frame_count
+                timestamp_ms = int(time.monotonic() * 1000)
+            timestamp_ms = max(timestamp_ms, self.last_timestamp_ms + 1)
+            self.last_timestamp_ms = timestamp_ms
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)

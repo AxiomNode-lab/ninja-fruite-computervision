@@ -12,6 +12,7 @@ from config import (
 )
 from game.fruit import Fruit
 from game.bomb import Bomb
+from game.slice_effect import SliceEffect
 
 
 class FruitSpawner:
@@ -34,6 +35,8 @@ class FruitSpawner:
             spawn_rate: Fruits/bombs per second to spawn
             bomb_rate: Probability of spawning bomb (0.0-1.0)
         """
+        self.effects = []
+        self.missed_fruits = 0
         self.fruits = []
         self.bombs = []
         self.spawn_timer = 0.0
@@ -62,9 +65,12 @@ class FruitSpawner:
         for bomb in self.bombs:
             bomb.update(delta_time, GRAVITY)
         
-        # Remove off-screen objects
-        self.fruits = [f for f in self.fruits if not f.is_off_screen()]
-        self.bombs = [b for b in self.bombs if not b.is_off_screen()]
+        self.missed_fruits += sum(not f.sliced and f.is_off_screen() for f in self.fruits)
+        self.fruits = [f for f in self.fruits if not f.sliced and not f.is_off_screen()]
+        self.bombs = [b for b in self.bombs if not b.hit and not b.is_off_screen()]
+        for effect in self.effects:
+            effect.update(delta_time)
+        self.effects = [effect for effect in self.effects if effect.age < 1.0]
     
     def _spawn_object(self):
         """Spawn either a fruit or bomb"""
@@ -97,6 +103,9 @@ class FruitSpawner:
         Returns:
             Modified frame
         """
+        for effect in self.effects:
+            effect.draw(frame)
+
         # Draw fruits
         for fruit in self.fruits:
             fruit.draw(frame)
@@ -226,9 +235,15 @@ class FruitSpawner:
                 nearby.append(bomb)
         return nearby
     
-    def slice_fruit(self, fruit):
-        """Mark a fruit as sliced"""
-        fruit.slice()
+    def slice_fruit(self, fruit, direction=(1, 0)):
+        """Slice once and retain only the short-lived visual effect."""
+        if not fruit.sliced:
+            self.effects.append(SliceEffect(fruit, direction))
+            fruit.slice()
+
+    def consume_missed_fruits(self):
+        count, self.missed_fruits = self.missed_fruits, 0
+        return count
     
     def hit_bomb(self, bomb):
         """Mark a bomb as hit"""
@@ -236,6 +251,8 @@ class FruitSpawner:
     
     def clear(self):
         """Remove all objects"""
+        self.effects.clear()
+        self.missed_fruits = 0
         self.fruits.clear()
         self.bombs.clear()
         self.spawn_timer = 0.0

@@ -19,9 +19,27 @@ COLOR_MAGENTA = (255, 0, 255)
 COLOR_GRAY = (128, 128, 128)
 
 # Hand Tracking Settings
-HAND_DETECTION_CONFIDENCE = 0.7
-HAND_TRACKING_CONFIDENCE = 0.5
+# Keep these thresholds separate: raising presence/tracking too aggressively makes
+# a valid hand disappear and forces MediaPipe to run palm detection more often.
+MIN_HAND_DETECTION_CONFIDENCE = 0.5
+MIN_HAND_PRESENCE_CONFIDENCE = 0.5
+MIN_TRACKING_CONFIDENCE = 0.5
 MAX_HANDS = 2
+HAND_INFERENCE_WIDTH = 640
+HAND_INFERENCE_HEIGHT = 360
+HAND_RESULT_MAX_AGE_MS = 150
+
+# Backwards-compatible aliases for code importing the old names.
+HAND_DETECTION_CONFIDENCE = MIN_HAND_DETECTION_CONFIDENCE
+HAND_TRACKING_CONFIDENCE = MIN_TRACKING_CONFIDENCE
+
+# One Euro fingertip filter. It damps small stationary jitter while allowing a
+# fast swipe to catch up quickly.
+HAND_SMOOTHING_MIN_CUTOFF = 1.7
+HAND_SMOOTHING_BETA = 0.22
+HAND_SMOOTHING_DERIVATIVE_CUTOFF = 1.0
+HAND_TRACKING_GAP_SECONDS = 0.15
+HAND_MAX_POINT_JUMP = 330
 
 # Landmark Colors
 LANDMARK_COLOR = COLOR_GREEN

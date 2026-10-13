@@ -51,6 +51,19 @@ class PolishTests(unittest.TestCase):
         smoother.update([], .033)
         self.assertEqual(smoother.update([hand(300)], .033)[0]["landmarks"][8][0], 300)
 
+    def test_smoothing_does_not_reprocess_same_async_result(self):
+        smoother = FingertipSmoother()
+        first = hand(100)
+        first["timestamp_ms"] = 1000
+        second = hand(104)
+        second["timestamp_ms"] = 1033
+        repeated = hand(104)
+        repeated["timestamp_ms"] = 1033
+
+        smoother.update([first], .033)
+        filtered = smoother.update([second], .033)[0]["landmarks"][8]
+        self.assertEqual(smoother.update([repeated], .033)[0]["landmarks"][8], filtered)
+
     def test_hand_order_change_does_not_create_slice(self):
         smoother = FingertipSmoother()
         detector = GestureDetector(velocity_threshold=100)
@@ -63,3 +76,14 @@ class PolishTests(unittest.TestCase):
         detector.update([hand(100)], .033)
         detector.update([None], .033)
         self.assertEqual(detector.hand_histories, {})
+
+    def test_duplicate_async_timestamp_is_not_a_motion_sample(self):
+        detector = GestureDetector(velocity_threshold=1)
+        first = hand(100)
+        first["timestamp_ms"] = 1000
+        repeated = hand(150)
+        repeated["timestamp_ms"] = 1000
+
+        detector.update([first], .033)
+        self.assertEqual(detector.update([repeated], .033), [])
+        self.assertEqual(len(detector.hand_histories[0]), 1)

@@ -19,22 +19,34 @@ export function intersects(a, b, fruit, padding = 5) {
 }
 
 export class SmoothPoint {
-  constructor() { this.point = null; this.time = 0; }
+  constructor() {
+    this.point = null; this.raw = null; this.time = 0;
+    this.derivative = { x: 0, y: 0 };
+  }
   update(point, time) {
     const dt = (time - this.time) / 1000;
-    if (!this.point || dt > .15 || dt <= 0 || Math.hypot(point.x - this.point.x, point.y - this.point.y) > 330) {
-      this.point = { ...point }; this.time = time;
+    if (!this.point || dt > .15 || dt <= 0 || Math.hypot(point.x - this.raw.x, point.y - this.raw.y) > 330) {
+      this.point = { ...point }; this.raw = { ...point }; this.time = time;
+      this.derivative = { x: 0, y: 0 };
       return { ...point, reset: true };
     }
-    const speed = Math.hypot(point.x - this.point.x, point.y - this.point.y) / dt;
-    // Adaptive low pass: steady at rest, responsive during a fast slice.
-    const cutoff = 2.4 + .018 * speed;
-    const alpha = 1 - Math.exp(-2 * Math.PI * cutoff * dt);
+    // Canonical One Euro filter: smooth the derivative, then use motion speed
+    // to reduce smoothing during deliberate fast swipes.
+    const derivativeAlpha = oneEuroAlpha(1, dt);
+    this.derivative.x += derivativeAlpha * ((point.x - this.raw.x) / dt - this.derivative.x);
+    this.derivative.y += derivativeAlpha * ((point.y - this.raw.y) / dt - this.derivative.y);
+    const cutoff = 1.7 + .22 * Math.hypot(this.derivative.x, this.derivative.y);
+    const alpha = oneEuroAlpha(cutoff, dt);
     this.point.x += alpha * (point.x - this.point.x);
     this.point.y += alpha * (point.y - this.point.y);
-    this.time = time;
+    this.raw = { ...point }; this.time = time;
     return { ...this.point, reset: false };
   }
+}
+
+function oneEuroAlpha(cutoff, dt) {
+  const tau = 1 / (2 * Math.PI * cutoff);
+  return 1 / (1 + tau / dt);
 }
 
 export function cameraPoint(point, videoWidth, videoHeight, width, height) {

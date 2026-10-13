@@ -54,8 +54,21 @@ class GameEngine:
         if not ret:
             return None
         
-        # Resize to target dimensions if needed
-        frame = cv2.resize(frame, (self.width, self.height))
+        # Match the browser's object-fit: cover behavior without stretching the
+        # hand when a 4:3 camera feeds the 16:9 game window.
+        source_height, source_width = frame.shape[:2]
+        source_ratio = source_width / source_height
+        target_ratio = self.width / self.height
+        if source_ratio > target_ratio:
+            crop_width = round(source_height * target_ratio)
+            offset = (source_width - crop_width) // 2
+            frame = frame[:, offset : offset + crop_width]
+        elif source_ratio < target_ratio:
+            crop_height = round(source_width / target_ratio)
+            offset = (source_height - crop_height) // 2
+            frame = frame[offset : offset + crop_height, :]
+        frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+        frame = cv2.flip(frame, 1)
         
         return frame
     

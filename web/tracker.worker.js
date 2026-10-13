@@ -7,8 +7,8 @@ self.onmessage = async ({ data }) => {
       const files = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VERSION}/wasm`);
       tracker = await HandLandmarker.createFromOptions(files, {
         baseOptions: { modelAssetPath: new URL('../hand_landmarker.task', self.location.href).href, delegate: 'CPU' },
-        runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: .6,
-        minHandPresenceConfidence: .6, minTrackingConfidence: .6,
+        runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: .5,
+        minHandPresenceConfidence: .5, minTrackingConfidence: .5,
       });
       self.postMessage({ type: 'ready' });
     } else if (data.type === 'frame') {

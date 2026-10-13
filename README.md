@@ -102,7 +102,8 @@ Fruit waves and bombs become more frequent. Preparation, pause, and tracking los
 do not advance the level timer. Restarting resets difficulty to level 1.
 Rendering uses `requestAnimationFrame`; inference
 runs in a worker, throttled to 30 requests/second with one frame in flight.
-Adaptive fingertip smoothing reduces jitter and resets after tracking loss.
+A time-aware One Euro fingertip filter reduces stationary jitter, follows fast
+swipes, and resets after tracking loss.
 
 From the repository root, run:
 
@@ -140,9 +141,12 @@ Browser tests cover continuous collision detection, jitter reduction, tracking
 reacquisition, mirrored/cropped camera coordinates, and separating fruit halves.
 Physical-camera tracking quality should also be checked on the target devices.
 
-The Python game also has cached fruit artwork, animated halves and juice,
-shared smoothed coordinates for trails and collisions, real video timestamps,
-and corrected missed-fruit accounting and object cleanup.
+The Python game uses MediaPipe `LIVE_STREAM` processing at 640x360 while keeping
+the 1280x720 display. It consumes only the newest result, rejects results older
+than 150 ms, and uses the same time-aware fingertip filtering for trails and
+collisions. Camera frames are center-cropped without distortion and mirrored for
+natural selfie control. It also has cached fruit artwork, animated halves and juice, real
+video timestamps, and corrected missed-fruit accounting and object cleanup.
 
 ### Requirements
 

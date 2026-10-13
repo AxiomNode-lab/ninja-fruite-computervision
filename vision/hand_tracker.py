@@ -1,6 +1,7 @@
 """MediaPipe hand-landmark tracking for the Fruit Ninja game."""
 
 import os
+import threading
 import time
 
 import cv2
@@ -12,7 +13,15 @@ from mediapipe.tasks.python.vision import (
     RunningMode,
 )
 
-from config import HAND_DETECTION_CONFIDENCE, HAND_TRACKING_CONFIDENCE, MAX_HANDS
+from config import (
+    HAND_INFERENCE_HEIGHT,
+    HAND_INFERENCE_WIDTH,
+    HAND_RESULT_MAX_AGE_MS,
+    MAX_HANDS,
+    MIN_HAND_DETECTION_CONFIDENCE,
+    MIN_HAND_PRESENCE_CONFIDENCE,
+    MIN_TRACKING_CONFIDENCE,
+)
 
 
 class HandTracker:
@@ -22,6 +31,10 @@ class HandTracker:
         self.frame_count = 0
         self.last_timestamp_ms = -1
         self.landmarker = None
+        self._result_lock = threading.Lock()
+        self._latest_hands = []
+        self._latest_result_timestamp_ms = -1
+        self._closed = False
 
         model_path = "hand_landmarker.task"
         try:
@@ -37,11 +50,12 @@ class HandTracker:
                 base_options = mp.tasks.BaseOptions(model_asset_path=model_path)
                 options = HandLandmarkerOptions(
                     base_options=base_options,
-                    running_mode=RunningMode.VIDEO,
+                    running_mode=RunningMode.LIVE_STREAM,
                     num_hands=MAX_HANDS,
-                    min_hand_detection_confidence=HAND_DETECTION_CONFIDENCE,
-                    min_hand_presence_confidence=HAND_TRACKING_CONFIDENCE,
-                    min_tracking_confidence=HAND_TRACKING_CONFIDENCE,
+                    min_hand_detection_confidence=MIN_HAND_DETECTION_CONFIDENCE,
+                    min_hand_presence_confidence=MIN_HAND_PRESENCE_CONFIDENCE,
+                    min_tracking_confidence=MIN_TRACKING_CONFIDENCE,
+                    result_callback=self._on_result,
                 )
                 self.landmarker = HandLandmarker.create_from_options(options)
                 print("[OK] HandLandmarker initialized successfully")
@@ -67,30 +81,35 @@ class HandTracker:
             timestamp_ms = max(timestamp_ms, self.last_timestamp_ms + 1)
             self.last_timestamp_ms = timestamp_ms
 
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            inference_frame = frame
+            if frame.shape[1] != HAND_INFERENCE_WIDTH or frame.shape[0] != HAND_INFERENCE_HEIGHT:
+                inference_frame = cv2.resize(
+                    frame,
+                    (HAND_INFERENCE_WIDTH, HAND_INFERENCE_HEIGHT),
+                    interpolation=cv2.INTER_AREA,
+                )
+            rgb_frame = cv2.cvtColor(inference_frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-            results = self.landmarker.detect_for_video(mp_image, timestamp_ms)
+            # LIVE_STREAM is non-blocking and internally drops new frames while
+            # inference is busy, preventing an ever-growing latency queue.
+            self.landmarker.detect_async(mp_image, timestamp_ms)
 
-            if results.hand_landmarks:
-                for hand_idx, hand_landmarks in enumerate(results.hand_landmarks):
-                    handedness_list = (
-                        results.handedness[hand_idx] if results.handedness else None
-                    )
-                    handedness = (
-                        handedness_list[0]
-                        if handedness_list and len(handedness_list) > 0
-                        else None
-                    )
+            with self._result_lock:
+                result_timestamp_ms = self._latest_result_timestamp_ms
+                latest_hands = list(self._latest_hands)
+
+            result_age_ms = timestamp_ms - result_timestamp_ms
+            if 0 <= result_age_ms <= HAND_RESULT_MAX_AGE_MS:
+                for hand in latest_hands:
                     hands_data.append(
                         {
+                            **hand,
                             "landmarks": self._extract_landmarks(
-                                hand_landmarks,
+                                hand["normalized_landmarks"],
                                 frame,
                             ),
-                            "handedness": (
-                                handedness.category_name if handedness else "Unknown"
-                            ),
-                            "confidence": handedness.score if handedness else 0.0,
+                            "timestamp_ms": result_timestamp_ms,
+                            "result_age_ms": result_age_ms,
                         }
                     )
 
@@ -101,15 +120,49 @@ class HandTracker:
 
         return frame, hands_data
 
+    def _on_result(self, results, _output_image, timestamp_ms):
+        """Store only the newest normalized result from MediaPipe's worker."""
+        hands = []
+        if results.hand_landmarks:
+            for hand_idx, hand_landmarks in enumerate(results.hand_landmarks):
+                handedness_list = (
+                    results.handedness[hand_idx] if results.handedness else None
+                )
+                handedness = (
+                    handedness_list[0]
+                    if handedness_list and len(handedness_list) > 0
+                    else None
+                )
+                hands.append(
+                    {
+                        "normalized_landmarks": [
+                            (landmark.x, landmark.y) for landmark in hand_landmarks
+                        ],
+                        "handedness": (
+                            handedness.category_name if handedness else "Unknown"
+                        ),
+                        "confidence": handedness.score if handedness else 0.0,
+                    }
+                )
+
+        with self._result_lock:
+            if self._closed or timestamp_ms < self._latest_result_timestamp_ms:
+                return
+            self._latest_hands = hands
+            self._latest_result_timestamp_ms = timestamp_ms
+
     def _extract_landmarks(
         self,
-        hand_landmarks,
+        normalized_landmarks,
         frame: np.ndarray,
     ) -> list[tuple[int, int]]:
         height, width, _ = frame.shape
         return [
-            (int(landmark.x * width), int(landmark.y * height))
-            for landmark in hand_landmarks
+            (
+                min(width - 1, max(0, round(x * width))),
+                min(height - 1, max(0, round(y * height))),
+            )
+            for x, y in normalized_landmarks
         ]
 
     def draw_landmarks(
@@ -172,4 +225,8 @@ class HandTracker:
 
     def close(self):
         if self.landmarker:
+            with self._result_lock:
+                self._closed = True
+                self._latest_hands = []
             self.landmarker.close()
+            self.landmarker = None

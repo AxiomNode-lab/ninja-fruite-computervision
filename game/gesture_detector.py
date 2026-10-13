@@ -29,14 +29,23 @@ class GestureDetector:
 
             hand_idx = hand_data.get("tracking_id", hand_idx)
             detected_indices.add(hand_idx)
-            if delta_time > 0.15:
-                self.hand_histories.pop(hand_idx, None)
             x, y = landmarks[8]
             if hand_idx not in self.hand_histories:
                 self.hand_histories[hand_idx] = deque(maxlen=self.history_size)
 
             history = self.hand_histories[hand_idx]
-            history.append((x, y, self.last_timestamp))
+            sample_timestamp = hand_data.get("timestamp_ms")
+            sample_timestamp = (
+                sample_timestamp / 1000.0
+                if sample_timestamp is not None
+                else self.last_timestamp
+            )
+            if history and sample_timestamp <= history[-1][2]:
+                # Do not turn a reused async result into another motion sample.
+                continue
+            if history and sample_timestamp - history[-1][2] > 0.15:
+                history.clear()
+            history.append((x, y, sample_timestamp))
 
             if len(history) >= 2:
                 slice_detected = self._check_for_slice(history, hand_idx)

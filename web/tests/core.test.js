@@ -39,6 +39,14 @@ test('tracking loss and position jumps reset instead of making phantom slices', 
   assert.equal(filter.update({ x: 100, y: 0 }, 1300).reset, true);
   assert.equal(filter.update({ x: 800, y: 0 }, 1333).reset, true);
 });
+test('One Euro filter resets when the same timestamp is reused', () => {
+  const filter = new SmoothPoint(); filter.update({ x: 100, y: 100 }, 1000);
+  const first = filter.update({ x: 104, y: 100 }, 1033);
+  const repeated = filter.update({ x: 104, y: 100 }, 1033);
+  assert.equal(repeated.reset, true);
+  assert.equal(repeated.x, 104);
+  assert.ok(first.x < repeated.x);
+});
 test('camera mapping mirrors and matches object-fit cover on portrait screens', () => {
   assert.deepEqual(cameraPoint({ x: .5, y: .5 }, 640, 480, 400, 600), { x: 200, y: 300 });
   assert.equal(cameraPoint({ x: .75, y: .5 }, 640, 480, 400, 600).x, 0);

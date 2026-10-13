@@ -240,7 +240,3 @@ The current tests focus on deterministic logic that can be verified without a we
 - High-score persistence
 - Performance profiling and adaptive frame processing
 - More advanced gesture classification beyond velocity thresholding
-
-## Author
-
-**Alaa Madi** — Software Engineering / Machine Learning & Computer Vision

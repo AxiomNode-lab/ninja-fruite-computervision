@@ -1,4 +1,4 @@
-import { SmoothPoint, acceptsTrackingResult, cameraPoint, intersects, splitFruit, difficultyAt } from './core.js';
+import { SmoothPoint, acceptsTrackingResult, cameraPoint, inferenceSize, intersects, splitFruit, difficultyAt } from './core.js';
 import { drawFruit, drawBackground, fruits } from './art.js';
 
 const $ = id => document.getElementById(id);
@@ -16,7 +16,8 @@ let best = 0;
 try { best = Number(localStorage.getItem('fruit-ninja-best')) || 0; } catch { /* Storage is optional. */ }
 $('best').textContent = best;
 
-function status(text) { $('status').textContent = text; }
+function setText(id, text) { if ($(id).textContent !== text) $(id).textContent = text; }
+function status(text) { setText('status', text); }
 function resize() {
   const rect = canvas.getBoundingClientRect(); width = rect.width; height = rect.height;
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -25,12 +26,13 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas);
 function hud() {
-  $('score').textContent = String(score).padStart(3, '0');
-  $('lives').textContent = '\u25cf '.repeat(Math.max(0, lives)) + '\u25cb '.repeat(STARTING_LIVES - Math.max(0, lives));
-  $('lives').setAttribute('aria-label', `${lives} lives`);
-  $('level').textContent = `LEVEL ${difficulty.level}`;
-  $('level-detail').textContent = `${difficulty.speed.toFixed(2)}x speed` + (difficulty.nextIn === null ? ' / MAX' : ` / next in ${difficulty.nextIn}s`);
-  $('combo').textContent = combo > 1 ? `${combo}× COMBO` : '';
+  setText('score', String(score).padStart(3, '0'));
+  setText('lives', '\u25cf '.repeat(Math.max(0, lives)) + '\u25cb '.repeat(STARTING_LIVES - Math.max(0, lives)));
+  const livesLabel = `${lives} lives`;
+  if ($('lives').getAttribute('aria-label') !== livesLabel) $('lives').setAttribute('aria-label', livesLabel);
+  setText('level', `LEVEL ${difficulty.level}`);
+  setText('level-detail', `${difficulty.speed.toFixed(2)}x speed` + (difficulty.nextIn === null ? ' / MAX' : ` / next in ${difficulty.nextIn}s`));
+  setText('combo', combo > 1 ? `${combo}× COMBO` : '');
 }
 function stopCamera() {
   cameraGeneration++; cameraReady = false; busy = false;
@@ -119,14 +121,15 @@ function trackingFailed() {
 function receiveHands(data) {
   // There is only one frame in flight, so a moderately late result is still the
   // newest available sample. Reject only a genuinely abandoned inference.
-  if (!acceptsTrackingResult(performance.now() - data.time)) { trails.clear(); return; }
+  const resultAge = performance.now() - data.time;
+  if (!acceptsTrackingResult(resultAge)) { trails.clear(); return; }
   const active = new Set();
   data.landmarks.forEach((landmarks, i) => {
     const key = data.handedness[i]?.[0]?.categoryName || `hand-${i}`;
     if (active.has(key)) return; // Ambiguous handedness must not join unrelated hands.
     active.add(key);
     const point = cameraPoint(landmarks[8], video.videoWidth, video.videoHeight, width, height);
-    moveBlade(key, point, data.time);
+    moveBlade(key, point, data.time, resultAge);
   });
   if (active.size) lastHandSeen = performance.now();
   for (const key of trails.keys()) if (!active.has(key)) trails.delete(key);
@@ -137,15 +140,18 @@ async function capture(time) {
   busy = true; lastInference = time; lastVideoTime = video.currentTime;
   const target = worker, generation = cameraGeneration;
   try {
-    const bitmap = await createImageBitmap(video);
+    const size = inferenceSize(video.videoWidth, video.videoHeight);
+    const bitmap = await createImageBitmap(video, {
+      resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'low',
+    });
     if (generation !== cameraGeneration || target !== worker) { bitmap.close(); return; }
     target.postMessage({ type: 'frame', bitmap, time }, [bitmap]);
   } catch { if (generation === cameraGeneration) { busy = false; trackingFailed(); } }
 }
-function moveBlade(key, raw, time) {
+function moveBlade(key, raw, time, leadMs = 0) {
   let trail = trails.get(key);
   if (!trail) { trail = { filter: new SmoothPoint(), points: [] }; trails.set(key, trail); }
-  const point = trail.filter.update(raw, time), previous = trail.points.at(-1);
+  const point = trail.filter.update(raw, time, leadMs), previous = trail.points.at(-1);
   if (point.reset) trail.points = [];
   trail.points.push({ ...point, time });
   trail.points = trail.points.filter(p => time - p.time < TRAIL_LIFETIME_MS).slice(-24);

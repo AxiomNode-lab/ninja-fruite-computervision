@@ -1,10 +1,14 @@
-const VERSION = '0.10.22-rc.20250304';
 let tracker;
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
-      const { HandLandmarker, FilesetResolver } = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VERSION}/vision_bundle.mjs`);
-      const files = await FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VERSION}/wasm`);
+      self.postMessage({ type: 'status', message: 'Loading hand-tracking engine…' });
+      const bundleUrl = new URL('../vendor/mediapipe/vision_bundle.mjs', self.location.href).href;
+      const wasmUrl = new URL('../vendor/mediapipe/wasm', self.location.href).href;
+      const { HandLandmarker, FilesetResolver } = await import(bundleUrl);
+      self.postMessage({ type: 'status', message: 'Starting hand-tracking engine…' });
+      const files = await FilesetResolver.forVisionTasks(wasmUrl);
+      self.postMessage({ type: 'status', message: 'Loading hand model…' });
       tracker = await HandLandmarker.createFromOptions(files, {
         baseOptions: { modelAssetPath: new URL('../hand_landmarker.task', self.location.href).href, delegate: 'CPU' },
         runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: .5,

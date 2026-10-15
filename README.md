@@ -105,10 +105,11 @@ runs in a worker, throttled to 30 requests/second with one frame in flight.
 A time-aware One Euro fingertip filter reduces stationary jitter, follows fast
 swipes, and resets after tracking loss.
 
-From the repository root, run:
+Install the pinned browser dependency and start the static build:
 
 ```bash
-python -m http.server 8000 --bind 127.0.0.1
+npm ci
+npm start
 ```
 
 Open **http://localhost:8000** and choose **Enable camera & play**. The browser
@@ -127,10 +128,9 @@ visit. If denied, allow the camera in site settings and retry. If embedded, the
 parent page must also permit the camera via its Permissions Policy and
 `<iframe allow="camera">`; opening the site directly is simplest.
 
-The initial hand tracker loads pinned MediaPipe JavaScript/WASM from jsDelivr;
-fonts load from Google Fonts with local fallbacks. An internet connection is
-needed for the tracker. The model is served locally as `hand_landmarker.task`.
-If loading fails or the camera disconnects, mouse/touch mode remains available.
+The hand tracker, MediaPipe JavaScript/WASM, and `hand_landmarker.task` model are
+served by the same site. Fonts load from Google Fonts with local fallbacks. If
+tracking fails or the camera disconnects, mouse/touch mode remains available.
 
 ```bash
 npm test

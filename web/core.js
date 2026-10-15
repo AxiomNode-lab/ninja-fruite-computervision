@@ -25,7 +25,7 @@ export class SmoothPoint {
   }
   update(point, time) {
     const dt = (time - this.time) / 1000;
-    if (!this.point || dt > .15 || dt <= 0 || Math.hypot(point.x - this.raw.x, point.y - this.raw.y) > 330) {
+    if (!this.point || dt > .5 || dt <= 0 || Math.hypot(point.x - this.raw.x, point.y - this.raw.y) > 330) {
       this.point = { ...point }; this.raw = { ...point }; this.time = time;
       this.derivative = { x: 0, y: 0 };
       return { ...point, reset: true };
@@ -42,6 +42,10 @@ export class SmoothPoint {
     this.raw = { ...point }; this.time = time;
     return { ...this.point, reset: false };
   }
+}
+
+export function acceptsTrackingResult(ageMs) {
+  return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= 2000;
 }
 
 function oneEuroAlpha(cutoff, dt) {

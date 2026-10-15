@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SmoothPoint, acceptsTrackingResult, intersects, cameraPoint, splitFruit, difficultyAt } from '../core.js';
+import { SmoothPoint, acceptsTrackingResult, inferenceSize, intersects, cameraPoint, splitFruit, difficultyAt } from '../core.js';
 
 test('levels advance at 20-second boundaries and restart at level one', () => {
   assert.equal(difficultyAt(19.99).level, 1);
@@ -33,6 +33,20 @@ test('smoothing damps jitter and follows fast movement', () => {
   assert.ok(jitter.x > 100 && jitter.x < 102);
   const swipe = filter.update({ x: 180, y: 100 }, 1066);
   assert.ok(swipe.x > 175);
+});
+test('latency compensation is bounded and leaves stationary input untouched', () => {
+  const filter = new SmoothPoint(); filter.update({ x: 100, y: 100 }, 1000);
+  const moving = filter.update({ x: 180, y: 100 }, 1033, 200);
+  assert.ok(moving.x > 180);
+  assert.ok(moving.x <= 250);
+
+  const stationary = new SmoothPoint(); stationary.update({ x: 50, y: 50 }, 1000);
+  assert.deepEqual(stationary.update({ x: 50, y: 50 }, 1033, 80), { x: 50, y: 50, reset: false });
+});
+test('inference frames preserve aspect ratio while capping their longest edge', () => {
+  assert.deepEqual(inferenceSize(640, 480), { width: 480, height: 360 });
+  assert.deepEqual(inferenceSize(480, 640), { width: 360, height: 480 });
+  assert.deepEqual(inferenceSize(320, 240), { width: 320, height: 240 });
 });
 test('tracking loss and position jumps reset instead of making phantom slices', () => {
   const filter = new SmoothPoint(); filter.update({ x: 0, y: 0 }, 1000);

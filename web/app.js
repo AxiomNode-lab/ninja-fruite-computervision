@@ -1,9 +1,10 @@
-import { SmoothPoint, cameraPoint, intersects, splitFruit, difficultyAt } from './core.js';
+import { SmoothPoint, acceptsTrackingResult, cameraPoint, intersects, splitFruit, difficultyAt } from './core.js';
 import { drawFruit, drawBackground, fruits } from './art.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d'), video = $('camera');
 const STARTING_LIVES = 5, FRUIT_GRAVITY = 300, READY_SECONDS = 4;
+const HAND_VISIBILITY_GRACE_MS = 1200, TRAIL_LIFETIME_MS = 500;
 let readyTime = READY_SECONDS, lastHandSeen = -Infinity;
 let width = 1200, height = 620, mode = 'menu', input = 'pointer', paused = false;
 let objects = [], pieces = [], drops = [], labels = [], trails = new Map();
@@ -87,6 +88,7 @@ async function startCamera() {
       worker.onerror = () => { clearTimeout(timeout); reject(new Error('Hand tracking could not load. Check your connection or try a current Chrome browser.')); };
       worker.onmessage = ({ data }) => {
         if (data.type === 'ready') { clearTimeout(timeout); resolve(); }
+        else if (data.type === 'status') status(data.message);
         else if (data.type === 'error') { clearTimeout(timeout); reject(new Error(data.message)); }
       };
       worker.postMessage({ type: 'init' });
@@ -115,8 +117,9 @@ function trackingFailed() {
   status('Camera tracking stopped · drag with mouse / touch to continue');
 }
 function receiveHands(data) {
-  // Discard late inference results instead of cutting at an outdated position.
-  if (performance.now() - data.time > 150) { trails.clear(); return; }
+  // There is only one frame in flight, so a moderately late result is still the
+  // newest available sample. Reject only a genuinely abandoned inference.
+  if (!acceptsTrackingResult(performance.now() - data.time)) { trails.clear(); return; }
   const active = new Set();
   data.landmarks.forEach((landmarks, i) => {
     const key = data.handedness[i]?.[0]?.categoryName || `hand-${i}`;
@@ -145,7 +148,7 @@ function moveBlade(key, raw, time) {
   const point = trail.filter.update(raw, time), previous = trail.points.at(-1);
   if (point.reset) trail.points = [];
   trail.points.push({ ...point, time });
-  trail.points = trail.points.filter(p => time - p.time < 180).slice(-24);
+  trail.points = trail.points.filter(p => time - p.time < TRAIL_LIFETIME_MS).slice(-24);
   if (!previous || point.reset || mode !== 'playing' || paused || readyTime > 0) return;
   const speed = Math.hypot(point.x - previous.x, point.y - previous.y) / Math.max(.001, (time - previous.time) / 1000);
   if (speed < 140) return;
@@ -211,7 +214,7 @@ function update(dt) {
 }
 function render(time) {
   const dt = Math.min((time - (render.last || time)) / 1000, .033); render.last = time;
-  const handVisible = input !== 'camera' || time - lastHandSeen < 400;
+  const handVisible = input !== 'camera' || time - lastHandSeen < HAND_VISIBILITY_GRACE_MS;
   if (mode === 'playing' && !paused) {
     void capture(time);
     // Give the player time to find the blade; freeze fruit when tracking is lost.
@@ -238,10 +241,10 @@ function render(time) {
   for (const label of labels) { label.age += effectDt; ctx.globalAlpha = Math.max(0, 1 - label.age); ctx.fillStyle = '#e5ffab'; ctx.font = 'bold 25px Outfit, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label.text, label.x, label.y - label.age * 70); }
   labels = labels.filter(p => p.age < 1); ctx.globalAlpha = 1;
   for (const trail of trails.values()) {
-    const points = trail.points.filter(p => time - p.time < 180);
+    const points = trail.points.filter(p => time - p.time < TRAIL_LIFETIME_MS);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1], b = points[i], fade = Math.max(0, 1 - (time - b.time) / 180);
+      const a = points[i - 1], b = points[i], fade = Math.max(0, 1 - (time - b.time) / TRAIL_LIFETIME_MS);
       ctx.globalAlpha = fade; ctx.strokeStyle = '#befe78'; ctx.shadowColor = '#befe78'; ctx.shadowBlur = 13; ctx.lineWidth = 2 + fade * 7;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.shadowBlur = 0; ctx.strokeStyle = '#f8ffe9'; ctx.lineWidth = 1 + fade * 2; ctx.stroke();

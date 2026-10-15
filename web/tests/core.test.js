@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SmoothPoint, intersects, cameraPoint, splitFruit, difficultyAt } from '../core.js';
+import { SmoothPoint, acceptsTrackingResult, intersects, cameraPoint, splitFruit, difficultyAt } from '../core.js';
 
 test('levels advance at 20-second boundaries and restart at level one', () => {
   assert.equal(difficultyAt(19.99).level, 1);
@@ -36,8 +36,17 @@ test('smoothing damps jitter and follows fast movement', () => {
 });
 test('tracking loss and position jumps reset instead of making phantom slices', () => {
   const filter = new SmoothPoint(); filter.update({ x: 0, y: 0 }, 1000);
-  assert.equal(filter.update({ x: 100, y: 0 }, 1300).reset, true);
-  assert.equal(filter.update({ x: 800, y: 0 }, 1333).reset, true);
+  assert.equal(filter.update({ x: 100, y: 0 }, 1600).reset, true);
+  assert.equal(filter.update({ x: 800, y: 0 }, 1633).reset, true);
+});
+test('slow devices keep current tracking results without accepting abandoned work', () => {
+  assert.equal(acceptsTrackingResult(150), true);
+  assert.equal(acceptsTrackingResult(650), true);
+  assert.equal(acceptsTrackingResult(2001), false);
+
+  const filter = new SmoothPoint(); filter.update({ x: 0, y: 0 }, 1000);
+  assert.equal(filter.update({ x: 50, y: 0 }, 1300).reset, false);
+  assert.equal(filter.update({ x: 60, y: 0 }, 1900).reset, true);
 });
 test('One Euro filter resets when the same timestamp is reused', () => {
   const filter = new SmoothPoint(); filter.update({ x: 100, y: 100 }, 1000);

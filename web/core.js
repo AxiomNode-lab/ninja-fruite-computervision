@@ -23,7 +23,7 @@ export class SmoothPoint {
     this.point = null; this.raw = null; this.time = 0;
     this.derivative = { x: 0, y: 0 };
   }
-  update(point, time) {
+  update(point, time, leadMs = 0) {
     const dt = (time - this.time) / 1000;
     if (!this.point || dt > .5 || dt <= 0 || Math.hypot(point.x - this.raw.x, point.y - this.raw.y) > 330) {
       this.point = { ...point }; this.raw = { ...point }; this.time = time;
@@ -40,12 +40,31 @@ export class SmoothPoint {
     this.point.x += alpha * (point.x - this.point.x);
     this.point.y += alpha * (point.y - this.point.y);
     this.raw = { ...point }; this.time = time;
-    return { ...this.point, reset: false };
+    // Inference completes after the camera timestamp. A small, capped projection
+    // removes that unavoidable delay without allowing a stale frame to jump far
+    // enough to create a phantom slice.
+    const lead = Math.min(Math.max(leadMs, 0), 80) / 1000;
+    let leadX = this.derivative.x * lead, leadY = this.derivative.y * lead;
+    const leadDistance = Math.hypot(leadX, leadY);
+    if (leadDistance > 70) {
+      const scale = 70 / leadDistance;
+      leadX *= scale; leadY *= scale;
+    }
+    return { x: this.point.x + leadX, y: this.point.y + leadY, reset: false };
   }
 }
 
 export function acceptsTrackingResult(ageMs) {
   return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= 2000;
+}
+
+export function inferenceSize(width, height, maxEdge = 480) {
+  if (!(width > 0) || !(height > 0) || !(maxEdge > 0)) return { width: 0, height: 0 };
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  return {
+    width: Math.max(2, Math.round(width * scale / 2) * 2),
+    height: Math.max(2, Math.round(height * scale / 2) * 2),
+  };
 }
 
 function oneEuroAlpha(cutoff, dt) {
